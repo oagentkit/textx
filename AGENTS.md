@@ -57,7 +57,7 @@ textutil/  diffx/  codeintel/  compact/  conversation/  reportutil/
 | 能力 | 归属 |
 |---|---|
 | 并发/流控/子进程/热插拔/钩子 | `github.com/oagentkit/runtime` |
-| 熔断（tier0 三态） | `github.com/oagentkit/runtime/breaker`，待退役到 `oekit/concurrency/breaker` |
+| 熔断 | `github.com/oekit/concurrency/breaker`（`runtime/breaker` 已于 runtime v0.3.0 退役） |
 | 通用 errors/stringx/encoding/mathx | `github.com/oekit/pkg` |
 | 提示词组装/转向/文件状态 | `github.com/oagentkit/promptx` |
 | 审计日志 | `github.com/oagentkit/guardx/audit` |

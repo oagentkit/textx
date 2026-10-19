@@ -27,8 +27,6 @@ ASCII 3 字符/token，与 octop 口径（CJK 2 字/token、ASCII 4 字符/token
 为什么需要：FTS5 的 unicode61 把连续汉字当**一个词元**，「磁盘」与「磁盘长期偏小」
 永不相等 → 0 命中，且**静默**返回空集（用户看到的是「库里没有这条」）。
 
-- 文档(changelog)：补 CHANGELOG.md（从 git 历史生成）
-
 ## [v0.5.0] — 2026-10-19
 
 - 杂务(deps)：依赖地板对齐远端最新（pkg v0.15.1） (#13)

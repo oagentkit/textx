@@ -60,4 +60,4 @@ textutil/  diffx/  codeintel/  compact/  conversation/  reportutil/
 | 熔断 | `github.com/oekit/concurrency/breaker`（`runtime/breaker` 已于 runtime v0.3.0 退役） |
 | 通用 errors/stringx/encoding/mathx | `github.com/oekit/pkg` |
 | 提示词组装/转向/文件状态 | `github.com/oagentkit/promptx` |
-| 审计日志 | `github.com/oagentkit/guardx/audit` |
+| 审计日志 | `github.com/oagentkit/obs/audit`（`guardx/audit` 已于 guardx v0.7.0 迁出） |

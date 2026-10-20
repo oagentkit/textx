@@ -2,6 +2,21 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.6.1] — 2026-10-20
+
+### 修复(agents)：审计日志归属改为 obs/audit（guardx/audit 已迁出）
+
+AGENTS.md 的「能力 → 包」映射表把审计日志指向 github.com/oagentkit/guardx/audit，
+但该包已于 guardx v0.7.0 迁出（现为 github.com/oagentkit/obs/audit），不存在。
+AGENTS.md 是 AI Agent 最常读的指引文件，照着 import 会 module not found。
+本仓代码并未 import guardx/audit（go.mod 无 guardx 依赖），是纯文档错误归属。
+按同表既有用法补注迁出说明（原 runtime/breaker 行同款写法）。
+发现途径：oagentkit/.github 的 Matrix docs drift 门禁
+(scan_stale_refs.py) —— 它同时抓出了这条真 bug 与三处误报，
+误报部分已在 oagentkit/matrix-tools#(下一 PR) 修掉。
+
+- [round-1] fix(go): tier0 基础包地板降到 go 1.24.0，CI go-version 同步到 1.24 (#7)
+
 ## [v0.6.0] — 2026-10-19
 
 ### 新增(textutil)：token 折算系数可配 + 检索用词元切分原语

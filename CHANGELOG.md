@@ -15,7 +15,7 @@ AGENTS.md 是 AI Agent 最常读的指引文件，照着 import 会 module not f
 (scan_stale_refs.py) —— 它同时抓出了这条真 bug 与三处误报，
 误报部分已在 oagentkit/matrix-tools#(下一 PR) 修掉。
 
-- [round-1] fix(go): tier0 基础包地板降到 go 1.24.0，CI go-version 同步到 1.24 (#7)
+- [round-1] fix(go): tier0 基础包地板降到 go 1.24.0，CI go-version 同步到 1.24
 
 ## [v0.6.0] — 2026-10-19
 
@@ -44,7 +44,7 @@ ASCII 3 字符/token，与 octop 口径（CJK 2 字/token、ASCII 4 字符/token
 
 ## [v0.5.0] — 2026-10-19
 
-- 杂务(deps)：依赖地板对齐远端最新（pkg v0.15.1） (#13)
+- 杂务(deps)：依赖地板对齐远端最新（pkg v0.15.1）
 
 ## [v0.4.0] — 2026-10-18
 
@@ -65,7 +65,7 @@ ASCII 3 字符/token，与 octop 口径（CJK 2 字/token、ASCII 4 字符/token
 外部依赖仅 github.com/oekit/pkg（stringx/encoding/mathx），无矩阵内依赖。
 门禁：go build / go vet / go test -race 6 包全绿，gofmt 干净。
 
-### 修复(agents)：熔断归属改为上游，runtime/breaker 已退役 (#1)
+### 修复(agents)：熔断归属改为上游，runtime/breaker 已退役
 
 `AGENTS.md` 的「明确不属于本仓」表仍把熔断归给
 `github.com/oagentkit/runtime/breaker`，标注「待退役到 oekit/concurrency/breaker」。
@@ -81,7 +81,7 @@ module not found，而表格里其它行都合法，整张表看不出异常。
 
 - 9d4fa38
 
-- 杂务(deps)：oekit 依赖升级 (#2)
+- 杂务(deps)：oekit 依赖升级
 - 杂务(deps)：oekit 三模块升至最新（pkg v0.13.0 / concurrency v0.12.0 / logx v0.7.0）
 
 - CI：接入 org 共享门禁（规则本体在 oagentkit/.github）

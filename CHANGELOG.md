@@ -2,6 +2,16 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.7.1] — 2026-10-26
+
+- 杂务(deps)：依赖地板追平上游本轮新版本——oekit/pkg v0.28.0
+
+v0.7.0 打 tag 时本仓 go.mod 钉的是 oekit/pkg v0.20.0，而那时上游最新已是 v0.28.0
+⇒ 该 tag 的「发版时刻地板时效」不达标（matrix-tools 的 Release floor 门禁判红）。
+tag 不可重打 ⇒ 只能靠后续版本补齐。本版只抬基座地板，不改任何行为：
+- github.com/oekit/pkg v0.20.0 → v0.28.0
+
+
 ## [v0.7.0] — 2026-10-26
 
 ### 新增(codeintel)：PreciseCallers 调用位精化——token 候选 + AST 封闭函数/限定名

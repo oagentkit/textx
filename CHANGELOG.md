@@ -2,6 +2,19 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.7.0] — 2026-10-26
+
+### 新增(codeintel)：PreciseCallers 调用位精化——token 候选 + AST 封闭函数/限定名
+
+- 与 GoCallers 同候选源（calls 表，定义行剔除），AST 二次核实只减不增：
+  排除非调用位、补 Caller（Recv.Name/Name，包级初始化记 "(package init)"）
+  与 Callee（pkg.F / T.M / F）
+- 零磁盘 IO：候选文件源码建索引期已驻留（fileEntry.src），内存重解析；
+  查询侧并发安全（不写 Index 字段）
+- 边界如实声明：无类型解析——同名异接收者方法全命中、接口分派不可见，
+  非 SSA 精确调用图
+- 对照测试钉死与 GoCallers 的同源契约（候选集一致，精化只减不增）
+
 ## [v0.6.2] — 2026-10-21
 
 - 杂务(deps)：依赖地板追平上游本轮新版本——oekit/pkg v0.20.0

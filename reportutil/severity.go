@@ -1,8 +1,8 @@
 // Package reportutil 评审/评测报告后处理原语（沉淀自 heimdallr 报告层与
 // bianque 评审流水线），一个包覆盖同一条消费链的三段：
 //
-//   - 严重度归一（severity.go）：high/medium/low 词表 + 外部审查专家常用
-//     别名（P0/fatal/nit…）折叠——「严重级别是什么、多严重」；
+//   - 严重度归一（severity.go）：critical/high/medium/low 四档词表 + 外部
+//     审查专家常用别名（P0/fatal/nit…）折叠——「严重级别是什么、多严重」；
 //   - 采样聚簇（cluster.go）：best-of-N 输出按签名通道聚簇计数（含
 //     file+规范化文本精确指纹），「哪些发现被独立复现」；
 //   - 对比统计（stats.go）：小样本通过率 Wilson 区间 + 配对 McNemar 精确
@@ -14,23 +14,36 @@ package reportutil
 
 import "strings"
 
-// 严重级别词表。
+// 严重级别词表（四档：critical > high > medium > low）。
+//
+// ⚠️ v0.8.0 起为四档（oagentkit/textx#20）：此前 critical 被折进 high、刻度只有
+// 3/2/1，四档宿主（审批闸按档位裁决）被迫在消费侧保留 critical 特判残根，
+// 忘了特判就与 high 静默同档、顶格语义丢失。Rank 刻度随之改 4/3/2/1——
+// high/medium/low 的相对序不变，仅顶格档从 high 之上多出一级。
 const (
-	High   = "high"
-	Medium = "medium"
-	Low    = "low"
+	Critical = "critical"
+	High     = "high"
+	Medium   = "medium"
+	Low      = "low"
 )
 
 // aliases 外部审查专家的常见严重度词表：cli/acpx 类外部 agent 常用 P0/P1/
 // nit 等通用研发词表而非 high/medium/low，缺别名会让外部专家的 P0 整批落
 // low（高危意见永远触发不了高严重度裁决）。
+//
+// P0-P3 按 4 档刻度取自然映射（P0→critical / P1→high / P2→medium / P3→low）
+// ——四档化后若仍把 P1 折进 medium、P0 与 P1 之间会空一档，别名表自身先
+// 不自洽。fatal/blocker/致命/阻断 = 顶格语义（crash/release blocker）。
 var aliases = map[string]string{
-	"p0":      High,
-	"fatal":   High,
+	"p0":      Critical,
+	"fatal":   Critical,
+	"blocker": Critical,
+	"致命":     Critical,
+	"阻断":     Critical,
+	"p1":      High,
+	"major":   High,
 	"urgent":  High,
-	"p1":      Medium,
-	"major":   Medium,
-	"p2":      Low,
+	"p2":      Medium,
 	"p3":      Low,
 	"trivial": Low,
 	"nit":     Low,
@@ -45,7 +58,9 @@ func Normalize(s string) (string, bool) {
 		return level, true
 	}
 	switch v {
-	case "high", "critical", "blocker", "error", "严重", "高危":
+	case "critical":
+		return Critical, true
+	case "high", "error", "严重", "高危":
 		return High, true
 	case "medium", "moderate", "warning", "warn", "中", "中等":
 		return Medium, true
@@ -56,9 +71,11 @@ func Normalize(s string) (string, bool) {
 	}
 }
 
-// Rank 越大越严重。
+// Rank 越大越严重（critical=4 / high=3 / medium=2 / low=1）。
 func Rank(s string) int {
 	switch s {
+	case Critical:
+		return 4
 	case High:
 		return 3
 	case Medium:
@@ -78,5 +95,5 @@ func Higher(a, b string) string {
 
 // Valid 是否属于钉死词表。
 func Valid(s string) bool {
-	return s == High || s == Medium || s == Low
+	return s == Critical || s == High || s == Medium || s == Low
 }

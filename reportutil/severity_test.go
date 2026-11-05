@@ -111,3 +111,26 @@ func TestNormalizeOutputAlwaysInVocab(t *testing.T) {
 		}
 	}
 }
+
+// Normalize3 三档兼容钩子：critical 折进 high，其余档位与 Normalize 一致；
+// 越界词的 bool 语义不变。
+func TestNormalize3FoldsCritical(t *testing.T) {
+	if got, ok := Normalize3("critical"); got != High || !ok {
+		t.Fatalf("Normalize3(critical)=%q,%v，want %q,true", got, ok, High)
+	}
+	for in, want := range map[string]string{"P0": High, "fatal": High, "阻断": High,
+		"high": High, "medium": Medium, "p2": Medium, "low": Low, "nit": Low} {
+		if got, ok := Normalize3(in); got != want || !ok {
+			t.Fatalf("Normalize3(%q)=%q,%v，want %q,true", in, got, ok, want)
+		}
+	}
+	if _, ok := Normalize3("gibberish"); ok {
+		t.Fatal("越界词仍应 false")
+	}
+	// 输出恒属词表（三档消费点可安全 switch）
+	for _, in := range []string{"critical", "p0", "high", "medium", "low", "", "gibberish"} {
+		if got, _ := Normalize3(in); got != High && got != Medium && got != Low {
+			t.Errorf("Normalize3(%q) = %q 越出三档", in, got)
+		}
+	}
+}

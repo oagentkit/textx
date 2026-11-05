@@ -52,6 +52,15 @@ var aliases = map[string]string{
 
 // Normalize 把任意写法归一到词表。
 // 第二个返回值=false 表示原值越界（已归为 low，调用方应记录告警）。
+//
+// ⚠️ 三档宿主迁移警示（v0.8.0 四档化，oagentkit/textx#20）：v0.7 时 critical
+// 会被折进 high（词表别名），switch/if 形态的消费点只列三档就够了；四档化后
+// critical 保留原值——**只列 High/Medium/Low 分支的消费点会让 critical 静默
+// 掉出所有分支**（既不进 high 计数、也不进 midLow 计数），最严重的意见落进
+// 「其余 → 兜底」，而全仓测试若没有 NormalizeSeverity("critical")=="high" 这类
+// 词表钉子（很常见），这个回归会无声上线（argus 消费侧实测踩坑）。三档宿主
+// 升级后必须收编 critical 分支；暂不升四档刻度的宿主用 Normalize3 保持折叠
+// 语义（显式选择，不靠别名静默兜底）。
 func Normalize(s string) (string, bool) {
 	v := strings.ToLower(strings.TrimSpace(s))
 	if level, ok := aliases[v]; ok {
@@ -69,6 +78,18 @@ func Normalize(s string) (string, bool) {
 	default:
 		return Low, false
 	}
+}
+
+// Normalize3 三档折叠语义的显式兼容钩子：与 Normalize 同一词表，但把
+// critical 折进 high（v0.7 刻度），供暂不升四档刻度的宿主显式选择——
+// 升级路径是收编 critical 分支后切回 Normalize，而不是让折叠语义继续
+// 藏在别名表里。
+func Normalize3(s string) (string, bool) {
+	v, ok := Normalize(s)
+	if v == Critical {
+		return High, ok
+	}
+	return v, ok
 }
 
 // Rank 越大越严重（critical=4 / high=3 / medium=2 / low=1）。

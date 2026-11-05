@@ -2,6 +2,22 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.9.0] — 2026-11-06
+
+- 文档(reportutil)：Normalize 补三档宿主迁移警示 + 新增 Normalize3 兼容钩子
+
+v0.8.0 四档化（#20）语义正确，但 v0.7 三档宿主升级时有一处静默迁移坑
+（argus 消费侧实测）：switch/if 形态的消费点只列 High/Medium/Low 分支时，
+critical（v0.7 折进 high、v0.8 保留原值）会静默掉出所有分支——最严重的
+意见落进「其余 → 兜底」，没有词表钉子测试的宿主抓不到这个回归。
+- Normalize doc 补 ⚠️ 迁移警示（坑的形态、为什么测试抓不到、两条出路）
+- 新增 Normalize3 显式兼容钩子：critical→high 折叠语义供暂不升四档刻度
+  的宿主显式选择（升级路径：收编 critical 分支后切回 Normalize）
+- TestNormalize3FoldsCritical：折叠正确性 + 越界 bool 语义 + 三档封闭
+关联 oagentkit/textx#27
+Co-authored-by: Murphy-Yi <zhangyi@Murphy-YideMac-Mini.local>
+
+
 ## [v0.8.0] — 2026-11-05
 
 ### 新增(reportutil)：severity 四档化——critical 独立顶格档（#20）

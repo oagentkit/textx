@@ -2,6 +2,63 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.8.0] — 2026-11-05
+
+### 新增(reportutil)：severity 四档化——critical 独立顶格档（#20）
+
+此前 critical/fatal/blocker 全部折进 high、Rank 刻度只有 3/2/1，四档宿主
+（审批闸按档位裁决）被迫在消费侧保留 critical 特判残根，忘了特判就与
+high 静默同档、顶格语义丢失。
+- 新增 Critical 常量；Normalize/aliases/Rank/Higher/Valid 同步四档
+- Rank 刻度 4/3/2/1：high/medium/low 相对序不变，仅顶格档上移
+- P0-P3 别名按 4 档刻度取自然映射（P0→critical/P1→high/P2→medium/P3→low）
+  ——P0 与 P1 之间不再空一档
+- fatal/blocker/致命/阻断 归 critical（顶格语义：crash/release blocker）
+- 新增 TestNormalizeOutputAlwaysInVocab：Normalize 输出恒属钉死词表，
+  下游 switch/查表不需要第四分支特判
+Co-authored-by: Murphy-Yi <zhangyi@Murphy-YideMac-Mini.local>
+
+- 杂务(deps)：依赖地板追到最新——github.com/oekit/pkg v0.34.1
+
+| 依赖 | 现地板 | 抬到 |
+|---|---|---|
+| `github.com/oekit/pkg` | `v0.34.0` | `v0.34.1` |
+## 为什么
+矩阵的**发版时刻地板时效**门禁（`verify_tag_floor --ref HEAD`）要求：各仓 HEAD
+（= 下次发版会发出去的内容）的依赖地板，相对那一刻的依赖最新版本，不能已落后。
+oekit 基座与矩阵模块都在高频发版 ⇒ 地板是**跑步机**，落后一格就会判红。
+## 兼容性实测
+本工具在提交前跑完 `go build` / `go vet` / `go test -race -count=1 ./...`（全绿才提交）
+与 `go mod tidy -diff`（无漂移）⇒ 改动**只影响依赖版本**，零行为差异。
+只改 `go.mod` / `go.sum` ⇒ 不需要 CHANGELOG 条目（版本段由下次发版的 `prewrite` 生成）。
+
+- 杂务(deps)：依赖地板追到最新——github.com/oekit/pkg v0.34.0
+
+oekit/pkg v0.34.1 含 StripCodeFence 语言标记修复（pkg#180）——本仓
+textutil.StripCodeFence 委托上游，抬地板即收编（oagentkit/textx#21）。
+Co-authored-by: Murphy-Yi <zhangyi@Murphy-YideMac-Mini.local>
+
+
+- 格式(reportutil)：gofmt 对齐 severity 注释缩进
+
+Co-authored-by: Murphy-Yi <zhangyi@Murphy-YideMac-Mini.local>
+
+
+## [v0.7.2] — 2026-11-04
+
+### 重构(textutil)：围栏剥离委托 oekit pkg/jsonrepair.StripCodeFence——围栏语义单源上游（本包此前为逐字副本，多仓并存各自漂移）；deps 地板 pkg v0.31.2
+
+- 9649258
+
+- 杂务(deps)：依赖地板追到最新——github.com/oekit/pkg v0.31.0
+
+oekit 基座发了新版本（pkg v0.31.0 / concurrency v0.23.0 / logx v0.8.0）⇒ 本仓的
+依赖地板落后 ⇒ 抬到最新，让**下一次发版**不再带出落后地板（打 tag 时刻的地板
+必须是当时的最新——`verify_tag_floor` / `release.py doctor` 都在查这条）。
+兼容性实测：本仓只用这些基座包的少量 API ⇒ go build / go vet / go test -race
+全绿，**零行为差异**；go 指令未被顶起（本仓的 go 地板不动）。
+
+
 ## [v0.7.1] — 2026-10-26
 
 - 杂务(deps)：依赖地板追平上游本轮新版本——oekit/pkg v0.28.0

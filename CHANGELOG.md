@@ -2,6 +2,299 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.10.0] — 2026-11-07
+
+### 修复(compact)：microcompact 的节省量折算到 provider 口径——三个 token 数不再跨口径相减（#33）
+
+## 根因
+`maybeMicrocompact` 里 `before` 可能是 **provider 真实用量**（`usageTokens > 0`），
+而 `saved` 来自 `applyClears`，是**本地估算**的增量。于是
+`TokensAfter = before - saved` 是两种口径相减的杂交量。两个可判定的后果：
+1. **三个数自相矛盾**：provider 说 5000、本地估出的节省 40 ⇒ 报「剩余 4960」，
+   而真实剩余约 1000。`before - saved == after` 这个「自洽」是假的；
+2. **门槛判错方向**（更坏）：`saved < MinTokenSavings` 用的也是本地口径。本地
+   估算对中文系统性低估约 2 倍，真实能省几千 token 的清理在本地口径下只算几十，
+   撞上 `DefaultMinTokenSavings(256)` 判 `below_savings` 不执行——**真 token 已
+   超窗，轻量先手却在等一个永远不会到来的「够省」**。
+附带项：`below_savings` 路径已填 `ClearedIDs` 却原样返回 `Messages`——报「清了
+这些」而转写里找不到占位符。
+## 修法
+- `localBefore := EstimateTokens(msgs)` 始终留一份本地估算量做折算基准；
+- 取到 provider 用量时，`saved = scaleToUsage(saved, localBefore, usageTokens)`
+  ——按「本地节省 × provider 用量 / 本地总量」折算成同一口径，**先折算再比门槛、
+  再相减**，三个数回到同一个量纲；
+- 折算比的前提（被清条目与整段转写同 token 密度）写进 `scaleToUsage` 文档；
+  取整向上（不得因取整把「省了一堆」折成 0）；`int64` 中间量防 32 位溢出；
+- `ClearedIDs` 只在真正应用时填。
+为什么不能反向折算：provider 只给了一个**整段**用量，没有「被清掉那几条各是多少」，
+所以只能从本地增量往真实口径放大，不能反过来。
+## 反向验证（两条，均实测红）
+| 注入 | 报错 |
+|---|---|
+| 去掉 `saved = scaleToUsage(...)`（退回杂交口径） | `provider 口径下节省应按比例放大到门槛之上，实得 below_min_savings` |
+| `below_savings` 路径仍填 `ClearedIDs` | `below_savings 不得报 ClearedIDs（转写原样返回却报「清了这些」）: [a]` |
+## 用例（`compact/microcompact_oracle_test.go`）
+- `TestMicrocompactUsageScalesSavingsIntoProviderOracle`：**成对**断言——同一份
+  转写在本地口径下判 `below_savings`、在 provider 口径（×100）下必须
+  `applied`，且 `saved` 恰为「本地节省 × 折算比」、`before - saved == after`。
+  只断言有 usage 那条，一个把 saved 硬编码成大数的实现也能过；
+- `TestMicrocompactNoUsageKeepsLocalOracle`：无 usage 时三个数全走本地口径且
+  `saved == 转写前后估值差`（折算不得污染原有路径）。
+
+### 修复(reportutil)：通道关联簇列表——共享签名但 eq 不同的等价项不再被拆成两簇各 1（#34）
+
+* fix(diffx): `---` 头行也重置文件归属——截断块的 hunk 不再误归属给上一个文件（#31）
+## 根因
+包注释明确声明：
+> `+++` / `---` / `diff --git` 行在任意位置都重置文件归属
+实现只处理 `diff --git`（重置）与 `+++`（设归属），**从不看 `---`**。
+于是截断/拼接形态（注释自称的兼容面）下，若某文件块只剩 `--- a/other.go`
+头（`+++` 被截掉），其后的 hunk 会归属到**上一个文件**。消费方按行区间做
+注入/定位就打错文件——而且是静默的：区间看起来完全合法，只是属于别的文件。
+## 修法
+头区状态机补 `--- ` 分支：命中即 `curFile = ""`。与声明对齐——hunk 归属
+只认 `+++`，`---` 只负责把归属清空。`/dev/null` 侧不用特判（清空本来就是
+它的效果）。
+## 用例
+新增 `diffx/hunk_minus_header_test.go`：
+1. **`TestHunkLinesMinusHeaderResetsOwner`**——`a.go` 正常一块 + 只剩 `---`
+   头的截断块 + hunk：断言 `a.go` 只有原始那一个区间、`other.go` 不入表、
+   表里只有一项。
+2. **`TestHunkLinesMinusHeaderNormalForms`**（成对对照）——完整块（`---` 清空
+   → `+++` 设归属）、新增文件（`--- /dev/null`）、删除文件（`+++ /dev/null`
+   不设归属）三种形态都不受新分支影响。
+## 反向验证
+去掉 `---` 分支：
+```
+--- FAIL: TestHunkLinesMinusHeaderResetsOwner
+    hunk_minus_header_test.go:17: a.go 只该有原始那一个区间，
+        实得 [[1 1] [10 11]]——截断块的 hunk 被误归属过来了
+```
+`[10 11]` 正是 `other.go` 那块的区间。
+## 验证
+`go test ./...` 全绿。
+关联 oagentkit/textx#31
+* fix(reportutil): 通道关联簇列表——共享签名但 eq 不同的等价项不再被拆成两簇各 1（#34）
+## 根因
+`Aggregate` 的 `byChannel` 是 `map[string]*Group[T]`——**每个通道只记首见簇**。
+于是这个形态必然拆散：
+- A、B、C 共享签名通道 `x`
+- `eq(A,B)=false`、`eq(B,C)=true`
+B 建了新簇，但它拿不到通道注册（`if _, seen := byChannel[ch]; !seen` 明确写着
+「首见者占位，后到者不抢通道」）；C 走通道 `x` 撞上的是 A，`eq` 不过就自成
+第三簇。结果 B/C 明明相互等价，却永远分居两簇，`Count` 各为 1。
+聚簇的用途正是「多份采样相互复现 ⇒ Count≥2 升级权重」。这个形态下复现信号
+被**静默拆散**：三份采样看起来像三个各出现一次的问题，前面反复出现的同一个
+缺陷被降权。
+## 修法
+`byChannel` 改为 `map[string][]*Group[T]`——通道关联**簇列表**：
+- 匹配轮：通道命中后，按注册顺序对该通道下的**每个**簇试 `eq`，命中即并入；
+- 建簇轮：每个新簇都在自己的所有通道下登记（不再只让首见者占位）；
+- 签名里重复出现的通道只登记一次（否则同一簇在同一通道下有多份，匹配轮白跑）。
+文档同步：`eq` 的表述从「与首见者等价才并入」改成「与**某个**既有簇的代表
+等价才并入，不做链式传递」——原句在修好之后已不成立，留着就是错的。
+## 用例
+新增 `reportutil/aggregate_channel_test.go`：
+1. **`TestAggregateSharesChannelAcrossGroups`**（判别式）——`alpha`/`beta`/`beta`
+   共享通道 `x`：断言 2 簇且 beta 的 `Count==2`。
+2. **`TestAggregateStillJoinsFirstMatch`**（成对对照）——与首见簇等价时仍并入
+   首见簇，「继续试其余簇」不得把明确等价的项推去另建新簇。
+3. **`TestAggregateMultiChannelLookup`**——一个簇在 x/y 两个通道下都登记，
+   后到者走任一路径都能找到它。
+4. **`TestAggregateDuplicateChannelInSignature`**——签名里故意重复同一通道，
+   结果不受影响（登记去重生效）。
+## 反向验证
+退回「每个通道只记首见簇」，复现的正是 issue 描述的三簇形态：
+```
+--- FAIL: TestAggregateSharesChannelAcrossGroups
+    应为 2 簇（alpha 一通、beta 两通），实得 3 簇:
+    [{...text:alpha... Count:1} {...text:beta... Count:1} {...text:beta... Count:1}]
+```
+两个 beta 各 `Count:1`。
+## 验证
+`go test ./...` 全绿。
+关联 oagentkit/textx#34
+
+### 修复(diffx)：`---` 头行也重置文件归属——截断块的 hunk 不再误归属给上一个文件（#31）
+
+## 根因
+包注释明确声明：
+> `+++` / `---` / `diff --git` 行在任意位置都重置文件归属
+实现只处理 `diff --git`（重置）与 `+++`（设归属），**从不看 `---`**。
+于是截断/拼接形态（注释自称的兼容面）下，若某文件块只剩 `--- a/other.go`
+头（`+++` 被截掉），其后的 hunk 会归属到**上一个文件**。消费方按行区间做
+注入/定位就打错文件——而且是静默的：区间看起来完全合法，只是属于别的文件。
+## 修法
+头区状态机补 `--- ` 分支：命中即 `curFile = ""`。与声明对齐——hunk 归属
+只认 `+++`，`---` 只负责把归属清空。`/dev/null` 侧不用特判（清空本来就是
+它的效果）。
+## 用例
+新增 `diffx/hunk_minus_header_test.go`：
+1. **`TestHunkLinesMinusHeaderResetsOwner`**——`a.go` 正常一块 + 只剩 `---`
+   头的截断块 + hunk：断言 `a.go` 只有原始那一个区间、`other.go` 不入表、
+   表里只有一项。
+2. **`TestHunkLinesMinusHeaderNormalForms`**（成对对照）——完整块（`---` 清空
+   → `+++` 设归属）、新增文件（`--- /dev/null`）、删除文件（`+++ /dev/null`
+   不设归属）三种形态都不受新分支影响。
+## 反向验证
+去掉 `---` 分支：
+```
+--- FAIL: TestHunkLinesMinusHeaderResetsOwner
+    hunk_minus_header_test.go:17: a.go 只该有原始那一个区间，
+        实得 [[1 1] [10 11]]——截断块的 hunk 被误归属过来了
+```
+`[10 11]` 正是 `other.go` 那块的区间。
+## 验证
+`go test ./...` 全绿。
+关联 oagentkit/textx#31
+
+### 修复(diffx)：hunk 行数/起始行越界整块跳过——不再因整数下溢产出 end < start 的负区间（#32）
+
+## 根因
+`diffx.go` 的 hunk 解析把行数的解析错误丢掉了：
+```go
+cnt, _ = strconv.Atoi(m[2])
+```
+而 `hunkRe` 的 `(\d+)` 不限长度。`@@ -1,1 +1,99999999999999999999 @@` 时
+`Atoi` 返回 `(MaxInt, ErrRange)`，错误被丢弃后 `start + cnt - 1` 整数下溢成
+**end < start 的负区间**，下游按闭区间取行会取错或取空。
+一段损坏（或恶意构造）的 diff 就能触发，且没有任何信号——这也是本仓
+「所有 error 禁止 `_` 忽略」规则被违反的实际后果，不只是风格问题。
+## 修法
+两处：
+1. **检查 `Atoi` 的 error**，越界即整块跳过（宁缺不错）。
+2. **补加法溢出判据**：两个加数各自合法也可能在加法处溢出
+   （`start = MaxInt` 解析成功、`cnt = 2` 也解析成功，但 `start+cnt-1` 越过 int）。
+   判据写成减法 `cnt-1 > math.MaxInt-start`，避免判据自己溢出。
+## 用例
+新增 `diffx/hunk_overflow_test.go`：
+1. **`TestHunkLinesOverflowSkipped`**——三条子用例：行数越界、起始行越界、
+   加法溢出（两个加数各自合法）。断言 `m` 为空（整块跳过），并对任何残留区间
+   断言 `end >= start` 且非负。
+2. **`TestHunkLinesNormalRangesStillParsed`**（成对对照）——合法区间照常解析，
+   且**边界但不溢出**的 `start=MaxInt, cnt=1 ⇒ [MaxInt, MaxInt]` 不得被误跳过
+   （否则「一律跳过」也能让上一条绿）。
+## 反向验证
+退回旧实现（丢 error、无溢出判据），两条子用例红，其中一条复现的正是下溢：
+```
+--- FAIL: TestHunkLinesOverflowSkipped/行数越界
+    hunk_overflow_test.go:48: 越界 hunk 应整块跳过，实得 map[a.go:[[1 9223372036854775807]]]
+--- FAIL: TestHunkLinesOverflowSkipped/加法溢出（两个加数各自合法）
+    hunk_overflow_test.go:40: a.go: 区间下溢 [9223372036854775807 -9223372036854775808]（end < start）
+```
+第二行就是 issue 描述的形态：`end` 变成了 `-9223372036854775808`。
+## 验证
+`go test ./...` 全绿。
+关联 oagentkit/textx#32
+
+### 修复(codeintel)：recvTypeName 识别泛型接收者——"Repo.Wrap" 不再退化为裸 "Wrap"（#36）
+
+## 根因
+`codeintel/callers.go` 的 `recvTypeName` 只认 `*ast.StarExpr` / `*ast.Ident` /
+`*ast.SelectorExpr` 三支。泛型接收者在 AST 里不是这三者：单类型参数是
+`*ast.IndexExpr`（`Repo[T]`），多类型参数是 `*ast.IndexListExpr`（`Pair[K, V]`），
+落 default 返回 ""，于是 `funcDeclName` 退化成裸方法名。
+`CallerRef.Caller` 的文档契约写的是「封闭函数（`Recv.Name` / `Name`）」
+（callers.go:24）——接收者被静默丢弃，**两个不同泛型接收者的同名方法在调用方
+归属上不可区分**。defs 侧不受影响（Recv 存的是源码文本切片），所以只有
+callers 这一侧错，错得还不显眼。
+## 修法
+`recvTypeName` 补两个分支，都取 `.X` 递归——泛型实例化只影响类型实参，
+不影响「方法属于哪个类型」这件事：
+```go
+case *ast.IndexExpr:
+	return recvTypeName(t.X)
+case *ast.IndexListExpr:
+	return recvTypeName(t.X)
+```
+`.X` 递归而不是直接返回，是为了让 `*Repo[T]`（StarExpr→IndexExpr→Ident）、
+`Repo[T]`（值接收者，IndexExpr 无 StarExpr 包裹）、`pkg.Repo[T]`
+（IndexExpr→SelectorExpr）三种形态走同一条路径。
+## 用例
+新增 `codeintel/callers_generic_test.go`：
+1. **`TestPreciseCallersGenericReceiver`**——判别场是「四个**同名** `Wrap`
+   只有接收者形态不同，各自调用同一个 `Target`」：
+   `*Repo[T]`（IndexExpr）、`*Pair[K, V]`（IndexListExpr）、`Val[T]`
+   （值接收者）、`*Plain`（非泛型对照）。断言四种 Caller
+   `Repo.Wrap` / `Pair.Wrap` / `Val.Wrap` / `Plain.Wrap` 各一条，
+   且**不出现裸 `Wrap`**——裸名正是「接收者被丢弃」的具体形态。
+2. **`TestPreciseCallersGenericReceiverCallee`**——泛型方法体内的方法调用
+   照常解析：`Caller="Repo.Wrap"` 且 `Callee="r.Save"` 同时对。补接收者归属
+   不该让 Callee 一起退化（两者走的是不同的分支）。
+## 反向验证
+退回修复（删掉两个 case）后，用例逐条复现 issue 里的症状：
+```
+缺 Caller="Repo.Wrap"（实得 map[Plain.Wrap:1 Wrap:3]）
+缺 Caller="Pair.Wrap"（实得 map[Plain.Wrap:1 Wrap:3]）
+缺 Caller="Val.Wrap"（实得 map[Plain.Wrap:1 Wrap:3]）
+出现裸 Caller="Wrap" 3 次——接收者类型名被丢弃（实得 map[Plain.Wrap:1 Wrap:3]）
+Caller 去重后 2 种，应为 4 种
+Caller="Wrap"，应为 "Repo.Wrap"          ← Callee 用例
+```
+`Wrap:3` 就是 issue 复现里那条 `Caller="Wrap"`：三个泛型接收者塌成同一个
+裸名，而**非泛型对照 `Plain.Wrap` 一直是对的**——所以缺陷看起来像
+「泛型不参与归属」，实际是 `recvTypeName` 的穷举漏了两支。
+## 影响面
+`argus` 的 `impactview/symbols.go`（:79-101）是同款复制实现，有一模一样的缺陷，
+随上游修复同步更新。
+关联 oagentkit/textx#36
+
+### 修复(diffx)：headerPath 先 unquote 再剥侧前缀，真实 git quoted 形态不再残留 b/（#35）
+
+根因：git 的 quote_two 语义把**侧前缀与路径整体**加引号（`+++ "b/a\"b.go"`），
+而 headerPath 是「先 TrimPrefix(side) 再查引号」。首字符是 `"` ⇒ 剥前缀永不命中，
+unquote 后 `b/` 就跟着留在结果里。
+不是边角情况：git 出厂 core.quotepath=true，**任何非 ASCII 文件名**都输出成
+`+++ "b/\346\226\207\344\273\266.go"`。残留 b/ ⇒ 下游按真实仓库路径查 map 必落空
+⇒ 该文件的 diff **静默丢失**（argus 的 fillFromRawDiff 实测是这个形态，
+PrepareIncremental 还会因此永远判「未审过」、增量去重整体失效）。
+修法：两种引号形态各判一次，而不是调换顺序——
+- 引号**整体包住前缀+路径**（真实 git 形态）⇒ 先 unquote 再剥前缀；
+- 引号只包路径本体（`+++ b/"a b.go"`，v0.12.0 注释假设的形态）⇒ 先剥前缀再 unquote。
+  真实 git 不产生后者，但既有行为有用例覆盖，不能因为调换顺序把它弄坏。
+抽 isQuoted 统一两处的判定形态，顺带消掉重复的 HasPrefix/HasSuffix 条件。
+反向验证：把实现逐字退回 v0.12.0（先剥前缀→再查引号）后，
+`+++ "b/\346\226\207\344\273\266.go"` 得到 `b/文件.go`（与 issue 描述逐字一致），
+9 条子用例里 5 条红；恢复后全绿。
+用例覆盖：引号内含侧前缀 / 非 ASCII 八进制转义 / --- 侧 a/ / 引号+行尾附加信息 /
+引号+CRLF / 前缀在引号外（既有形态不回退）/ 裸路径 / --no-prefix / quoted 无前缀，
+外加 DiffPath 端到端两条（含删除文件回退 --- 侧）。
+
+- 文档(textutil)：两套 token 口径写明适用场景与约 2 倍量纲差，并用例钉住倍率（#30）
+
+## 根因（口径断裂的库侧）
+`EstTokens`（纯 rune，rune/3）与 `EstTokensCJK`（汉字 2 单位，units/3+1）在
+**同一段中文文本上差约 2 倍**，而两者都在公开面上、都没有写明适用场景——
+`EstTokens` 的文档只有「已知 rune 数时的 token 估算（向上取整）」一句。
+后果是消费方各挑一个：`llm` 的预算记账用 CJK 口径，`promptx` 的段计量用纯 rune
+口径（后者已由配套 PR 切正），同一条链上「组装时报告 800、发出去预算说 1600」，
+预算闸门与成本看板一起失真。
+这不是精度问题——**是量纲问题**：两种口径的分母不同，混用时比值就是错的，
+而且估错不崩，只会静默挤掉内容或提前拒绝。
+## 修法（只动文档与用例，不改行为）
+- `EstTokens` / `EstTokensOf` 文档补「纯 rune 口径，对中文系统性低估约 2 倍」
+  + **该用哪个**的对照表（ASCII / 含中文 / 需与 llm 对齐 / 只有 rune 计数）；
+- `EstTokensCJK` 文档补「跨模块口径的唯一推荐值」与「短文本略偏大是刻意的取舍」；
+- 行为一行未改——`EstTokens` 仍是 rune/3，`EstTokensCJK` 仍是 units/3+1，
+  既有调用点零影响。
+## 为什么要有用例
+文档里写「约 2 倍」是散文，散文会漂：有人改了除数或 `+1`，注释照旧写着 2 倍。
+既然跨模块预算记账靠的就是这个倍率关系，就把它钉成断言。
+- `TestEstTokensOracleRatioOnPureCJK`：300/600/1500 个汉字上 CJK 口径 / 纯 rune
+  口径的比值必须落在 1.8~2.4。区间而非等号（两函数各有取整与 +1，小样本有抖动），
+  但「接近 2」与「接近 1」是口径分水岭，判得开；
+- `TestEstTokensOracleAgreeOnASCII`：成对对照——纯 ASCII 上两口径只差取整与 +1，
+  所以中文场景的 2 倍差**不能**用「反正估不准」糊过去；
+- `TestEstTokensCJKRunesMatchesCJK`：`EstTokensCJKRunes` 与字符版同口径（它存在的
+  理由是免物化字符串，不是另一套算法）。
+## 反向验证（实测红）
+把 `EstTokensCJK` 的 `if runeUnitsCJK(r) == 2 { units += 2 }` 改成 `units++`：
+```
+300 个汉字：纯 rune 口径 100、CJK 口径 101，比值 1.01 —— 文档声明约 2 倍；
+比值落到 1 附近说明 CJK 口径被改回了纯 rune
+```
+
+
 ## [v0.9.0] — 2026-11-06
 
 - 文档(reportutil)：Normalize 补三档宿主迁移警示 + 新增 Normalize3 兼容钩子

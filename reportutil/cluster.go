@@ -55,40 +55,52 @@ type Group[T any] struct {
 //     「精确指纹」「file+规范化文本」双通道）。通道只是快速定位，最终归属
 //     以 eq 为准：任一通道命中既有簇且 eq 判定等价 → 并入；
 //   - eq(a, b)：a（既有簇代表）与 b 是否为同一问题。实现应只对比代表：
-//     本包语义是「与首见者等价才并入」，链式传递匹配不成立（保守，防止
-//     漂移链把不同问题串成一簇）。签名命中但 eq 不等价时继续尝试其余
-//     通道，全部未命中则自成新簇。
+//     本包语义是「与某个既有簇的代表等价才并入」，不做链式传递（保守，
+//     防止漂移链把不同问题串成一簇）。签名命中但 eq 不等价时，先试**共享
+//     该通道的其余簇**，再试其余通道；全部未命中则自成新簇。
 //
 // 输入按采样序传入；输出簇按首见序排列。
 func Aggregate[T any](items []T, signature func(T) []string, eq func(a, b T) bool) []Group[T] {
 	var out []Group[T]
 	var groups []*Group[T]
-	byChannel := map[string]*Group[T]{}
+	// 一个通道可以关联**多个**簇（textx#34）：早先只存首见簇，于是
+	// 「A、B、C 共享通道 x，eq(A,B)=false 而 eq(B,C)=true」时 B 建的新簇拿不到
+	// 通道注册，C 撞上 A 的簇、eq 不过便自成第三簇——B/C 明明相互等价却永远
+	// 分居两簇，Count 各为 1，多份采样相互复现的信号被静默拆散。
+	byChannel := map[string][]*Group[T]{}
 	for _, item := range items {
 		// 签名每 item 只算一次（匹配轮与建簇轮共用）——签名函数可能昂贵或非纯，
 		// 两次调用可能返回不同通道集导致注册与匹配不一致
 		channels := signature(item)
 		joined := false
 		for _, ch := range channels {
-			g, dup := byChannel[ch]
-			if !dup || !eq(g.Representative, item) {
-				continue // 未命中或签名命中但不等价（如行号不相容）→ 试下一通道
+			for _, g := range byChannel[ch] {
+				if !eq(g.Representative, item) {
+					continue // 签名命中但不等价（如行号不相容）→ 试同通道的下一簇
+				}
+				g.Items = append(g.Items, item)
+				g.Count++
+				joined = true
+				break
 			}
-			g.Items = append(g.Items, item)
-			g.Count++
-			joined = true
-			break
+			if joined {
+				break
+			}
 		}
 		if joined {
 			continue
 		}
 		g := &Group[T]{Representative: item, Signature: channels, Items: []T{item}, Count: 1}
 		groups = append(groups, g)
+		seen := map[string]bool{}
 		for _, ch := range channels {
-			// 首见者占位，后到者不抢通道（归属以首见为准）
-			if _, seen := byChannel[ch]; !seen {
-				byChannel[ch] = g
+			// 每个新簇都在自己的通道下登记（不再只让首见者占位）——
+			// 后到者才能被找到，这正是聚合的本意。
+			if seen[ch] {
+				continue // 签名里重复的通道只登记一次
 			}
+			seen[ch] = true
+			byChannel[ch] = append(byChannel[ch], g)
 		}
 	}
 	for _, g := range groups {

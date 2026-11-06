@@ -17,6 +17,7 @@
 package diffx
 
 import (
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -200,10 +201,23 @@ func HunkLines(diffText string) map[string][]LineRange {
 			start, err1 := strconv.Atoi(m[1])
 			cnt := 1
 			if m[2] != "" {
-				cnt, _ = strconv.Atoi(m[2])
+				var err2 error
+				cnt, err2 = strconv.Atoi(m[2])
+				if err2 != nil {
+					// 越界（`@@ -1,1 +1,99999999999999999999 @@`）时 Atoi 返回
+					// (MaxInt, ErrRange)：丢掉 error 会让下面的加法整数下溢成
+					// end < start 的负区间，下游按区间取行取错/取空（textx#32）。
+					// 损坏/恶意 diff 即可触发，故整块跳过——宁缺不错。
+					continue
+				}
 			}
 			if err1 != nil || cnt <= 0 {
 				continue // 纯删除块：新文件侧无行
+			}
+			// 两个加数各自合法也可能在加法处溢出：start 与 cnt 都在 int 范围内
+			// 时，start+cnt-1 仍可能越过 MaxInt。判据写成减法避免自己溢出。
+			if cnt-1 > math.MaxInt-start {
+				continue // 区间越出 int：同样是「取错行」，一并跳过
 			}
 			out[curFile] = append(out[curFile], LineRange{start, start + cnt - 1})
 			continue

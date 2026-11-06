@@ -102,19 +102,35 @@ func headerPath(line, prefix string) (string, bool) {
 		return "", false
 	}
 	p := stripTab(strings.TrimPrefix(line, prefix))
-	// 侧前缀剥离（+++ → b/，--- → a/；quoted 形态下前缀在引号**外**：
-	// `+++ b/"a b.go"`）；无该前缀 = --no-prefix 形态，原样通过
 	side := "b/"
 	if prefix == "--- " {
 		side = "a/"
 	}
-	p = strings.TrimPrefix(p, side)
-	// quoted path：git 对含空格/特殊字符路径的 C 风格转义形态（引号包住
-	// 剥前缀后的路径本体）
-	if strings.HasPrefix(p, `"`) && strings.HasSuffix(p, `"`) && len(p) >= 2 {
-		return unquoteC(p[1 : len(p)-1]), true
+	// quoted path 有两种形态，剥前缀与 unquote 的**先后**必须分别对待
+	// （textx#35——原先只有「先剥前缀再查引号」一个顺序，真实 git 输出永不命中）：
+	//
+	//  1. git 实际输出的 quote_two 形态：**侧前缀与路径整体**加引号，
+	//     `+++ "b/a\"b.go"`。此时前缀在引号**内**⇒ 必须先 unquote 再剥，
+	//     否则 TrimPrefix("b/") 撞上首字符 `"` 不命中，b/ 跟着留在结果里。
+	//     core.quotepath 出厂为 true ⇒ 任何非 ASCII 文件名都是这个形态
+	//     （`+++ "b/\346\226\207\344\273\266.go"`），不是边角情况。
+	//  2. 前缀在引号外的形态（`+++ b/"a b.go"`）：v0.12.0 注释按此假设写的实现，
+	//     真实 git 不产生它，但既有行为有覆盖 ⇒ 保留（先剥前缀再 unquote）。
+	//
+	// 两种形态都要支持，故不是简单调换顺序，而是两侧各判一次。
+	if isQuoted(p) {
+		return strings.TrimPrefix(unquoteC(p[1:len(p)-1]), side), true
 	}
-	return p, true
+	if q := strings.TrimPrefix(p, side); isQuoted(q) {
+		// 无侧前缀 = --no-prefix 形态，TrimPrefix 是 no-op，下面同样是纯 unquote
+		return unquoteC(q[1 : len(q)-1]), true
+	}
+	return strings.TrimPrefix(p, side), true
+}
+
+// isQuoted 报告 p 是否是整体加引号的 git quoted path（"…"，至少两个字符）。
+func isQuoted(p string) bool {
+	return len(p) >= 2 && strings.HasPrefix(p, `"`) && strings.HasSuffix(p, `"`)
 }
 
 // unquoteC 反转义 git quoted path 的 C 风格转义（\" \\ \t \n 与 \八进制）。

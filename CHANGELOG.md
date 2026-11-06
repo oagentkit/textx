@@ -260,6 +260,8 @@ PrepareIncremental 还会因此永远判「未审过」、增量去重整体失�
 引号+CRLF / 前缀在引号外（既有形态不回退）/ 裸路径 / --no-prefix / quoted 无前缀，
 外加 DiffPath 端到端两条（含删除文件回退 --- 侧）。
 
+- 杂务(deps)：依赖地板追到最新——github.com/oekit/pkg v0.35.2
+
 - 文档(textutil)：两套 token 口径写明适用场景与约 2 倍量纲差，并用例钉住倍率（#30）
 
 ## 根因（口径断裂的库侧）

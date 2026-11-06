@@ -17,11 +17,30 @@ import (
 const TokenCharDivisor = 3
 
 // EstTokensOf 字符串 token 估算（rune 数 / TokenCharDivisor 向上取整）。
+//
+// ⚠️ **纯 rune 口径**：每个字符都算 1 单位，对中文系统性低估约 2 倍
+// （汉字实际 ≈0.67 token/字，本口径给 0.33）。中文/日文/韩文为主的文本用
+// EstTokensCJK；与它混用会让同一条链上的预算记账与预算消费不同源，
+// 最终「组装时报告 800、发出去预算说 1600」（textx#30 的实证形态）。
+// 纯 ASCII 场景两者差异只剩「非空 +1」的量级，可任选。
 func EstTokensOf(s string) int {
 	return EstTokens(utf8.RuneCountInString(s))
 }
 
-// EstTokens 已知 rune 数时的 token 估算（向上取整）。
+// EstTokens 已知 rune 数时的 token 估算（向上取整）——纯 rune 口径。
+//
+// 与 EstTokensCJK 的关系（textx#30）：两者的差距**不是精度差，是量纲差**。
+// 同一段纯中文文本，本函数给 ceil(n/3)，EstTokensCJK 给 2n/3+1 ⇒ 约 2 倍。
+// 选错口径不会崩，只会静默地把预算记少一半或把内容挤掉一半。
+//
+// 该用哪个：
+//
+//	纯 ASCII（代码/日志/英文提示）   任一即可（差异 ≈ +1）
+//	含中文的提示词/会话/报告         EstTokensCJK
+//	需要与 llm 的预算记账对齐        EstTokensCJK（那条链已切到 CJK 口径）
+//	只有 rune 计数、内容以 CJK 为主   EstTokensCJKRunes（免物化字符串）
+//
+// 精确计量始终归 provider usage 回传，这些只是**事前估算**。
 func EstTokens(runes int) int {
 	if runes <= 0 {
 		return 0
@@ -33,6 +52,13 @@ func EstTokens(runes int) int {
 // 其余计 1，tokens ≈ units/3 + 1（非空下限 1）。纯 rune 计数口径对中文系统性
 // 低估（经验上中文 ≈ 1 字 0.67 token、英文 ≈ 4 字符 1 token）——中文为主的
 // 文本（提示词/会话历史/报告）用本函数；精确计量仍归 provider usage 回传。
+//
+// **跨模块口径的唯一推荐值**（textx#30）：llm 的预算记账、promptx 的段计量
+// 都已切到这里。同一段中文文本上它比 EstTokens 大约 2 倍，所以两者绝不可在
+// 同一条链上混用——分母不同，比值就是错的。
+//
+// 短文本上本函数略偏大（非空即 1 再 +1，如 "abc" 得 2 而非 1）：这是刻意的，
+// 「短文本多算 1」远比「中文系统性少算一半」便宜。
 func EstTokensCJK(s string) int {
 	if s == "" {
 		return 0

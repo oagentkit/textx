@@ -145,7 +145,12 @@ func funcDeclName(fd *ast.FuncDecl) string {
 	return name
 }
 
-// recvTypeName 接收者类型名（*T / T / pkg.T → T / pkg.T）。
+// recvTypeName 接收者类型名（*T / T / pkg.T → T / pkg.T；
+// 泛型 *T[A] / *T[A, B] / pkg.T[A] 取实例化前的类型名，丢弃类型实参）。
+//
+// 泛型接收者在 AST 里不是 Ident/SelectorExpr 而是 IndexExpr（单实参）
+// 或 IndexListExpr（多实参），不处理会落 default 返回 ""，于是
+// Caller 退化成裸方法名——两个不同泛型接收者的同名方法就不可区分。
 func recvTypeName(expr ast.Expr) string {
 	switch t := expr.(type) {
 	case *ast.StarExpr:
@@ -154,6 +159,10 @@ func recvTypeName(expr ast.Expr) string {
 		return t.Name
 	case *ast.SelectorExpr:
 		return t.Sel.Name
+	case *ast.IndexExpr:
+		return recvTypeName(t.X)
+	case *ast.IndexListExpr:
+		return recvTypeName(t.X)
 	default:
 		return ""
 	}

@@ -228,6 +228,15 @@ func HunkLines(diffText string) map[string][]LineRange {
 			curFile = ""
 			continue
 		}
+		// `--- ` 头同样重置归属（textx#31）：包注释声明「+++ / --- / diff --git
+		// 行在任意位置都重置文件归属」，但实现一直只看 diff --git 与 +++。
+		// 截断/拼接形态下某块只剩 `--- a/other.go` 头（`+++` 被截掉）时，
+		// 其后的 hunk 会归属到**上一个文件**——消费方按行区间注入/定位就打错
+		// 文件。与声明对齐：hunk 归属只认 `+++`，`---` 只负责把归属清空。
+		if _, ok := headerPath(line, "--- "); ok {
+			curFile = ""
+			continue
+		}
 		if p, ok := headerPath(line, "+++ "); ok && p != "/dev/null" {
 			curFile = p
 		}

@@ -337,7 +337,10 @@ func MaybeMicrocompactWithUsage(msgs []Message, cfg MicroConfig, lastAssistantDo
 }
 
 func maybeMicrocompact(msgs []Message, cfg MicroConfig, lastAssistantDone, now time.Time, usageTokens int) MicroResult {
-	before := EstimateTokens(msgs)
+	// localBefore 是**本地估算**口径的转写规模：即使 before 取 provider 真实用量，
+	// 也要留一份本地量做折算基准（见 applyClears 之后的 scaleToUsage）。
+	localBefore := EstimateTokens(msgs)
+	before := localBefore
 	if usageTokens > 0 {
 		before = usageTokens
 	}
@@ -360,12 +363,30 @@ func maybeMicrocompact(msgs []Message, cfg MicroConfig, lastAssistantDone, now t
 	}
 
 	out, clearedIDs, saved := applyClears(msgs, groups[:clearCount])
-	res.ClearedIDs = clearedIDs
+	// 口径统一（textx#33）：saved 是**本地估算**增量，而 before 可能是 provider
+	// 真实用量——两者直接相减是两种口径的杂交量。杂交的两个后果都实测存在：
+	//
+	//  1. TokensAfter 无意义：provider 说 5000、本地估出的节省是 40，相减报 4960
+	//     「剩余」，而按真实口径其实还剩 ~1000；
+	//  2. **门槛判错方向**：本地口径对中文系统性低估约 2 倍，真实能省 4000 的
+	//     清理在本地口径下只算 40，撞上 DefaultMinTokenSavings(256) 判
+	//     below_savings 不执行——真 token 已超窗，轻量先手却在等一个永远不会
+	//     到来的「够省」。
+	//
+	// 折算方向是「本地节省 → provider 口径」：按整段转写两种口径的比值线性放大
+	// （同密度假设，已写进 scaleToUsage 的文档）。反向做不了——provider 只给了
+	// 一个整段用量，没有「被清掉那几条分别是多少」。
+	if usageTokens > 0 {
+		saved = scaleToUsage(saved, localBefore, usageTokens)
+	}
 	if saved < minSavingsOf(cfg) {
-		// 节省不足门槛：返回原转写，不让会话形态为微小收益抖动
+		// 节省不足门槛：返回原转写，不让会话形态为微小收益抖动。
+		// ClearedIDs 此处置空：转写原样返回却报「清了这些」，调用方按 id 去
+		// 转写里找占位符会找不到（textx#33 的附带项）。
 		res.Reason = MicroBelowSavings
 		return res
 	}
+	res.ClearedIDs = clearedIDs
 	res.Reason = MicroApplied
 	res.Messages = out
 	res.TokensAfter = before - saved
@@ -483,4 +504,27 @@ func collectClearableGroups(msgs []Message, cfg MicroConfig) [][]int {
 	}
 	flush()
 	return groups
+}
+
+// scaleToUsage 把**本地估算口径**的节省量折算到 provider 真实用量口径。
+//
+// 折算比取「provider 用量 / 本地估算总量」：前提是「被清掉的那几条与整段转写
+// 有相同的 token 密度」。这个假设在真实会话里基本成立（工具结果与正文的
+// 中文/ASCII 比例相近），估错的量级也远小于「直接拿两种口径相减」——后者错
+// 的不是比例而是量纲。
+//
+// 取整向上：折算后不得因取整归零，否则「省了一堆」被判成「零节省」。
+// localBefore 或 usageTokens 非正时没有折算依据，原样返回。
+func scaleToUsage(saved, localBefore, usageTokens int) int {
+	if saved <= 0 || localBefore <= 0 || usageTokens <= 0 {
+		return saved
+	}
+	// int64 中间量：saved/usageTokens 都在 token 量级，但 32 位平台上乘积能溢出
+	v := int64(saved) * int64(usageTokens)
+	d := int64(localBefore)
+	scaled := (v + d - 1) / d
+	if scaled > int64(math.MaxInt) {
+		return math.MaxInt
+	}
+	return int(scaled)
 }

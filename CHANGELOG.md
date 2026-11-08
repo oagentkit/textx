@@ -2,11 +2,42 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.10.5] — 2026-11-09
+
+### 修复：textx 第三轮 issue 清零（#62 #63）
+
+* fix(compact): countGroupsToCover 恰好覆盖完 gap 不再误判覆盖不完退半量（#62）
+退化分支只在全组扫完仍未覆盖（循环自然耗尽）时触发；n=len-1 恰覆盖
+返回 len-1、n=len 全组覆盖钳到 len-1。旧判据 n >= len-1 把恰覆盖也打进
+退半量，SelectAfterOverflow 移组不足 → 摘要请求再溢出 → 白烧一轮
+provider 重试。
+* fix(codeintel): 定义行去重键扩为 int64，根除 fid>4096 / line>2^20 碰撞漏报（#63）
+References / GoCallers / PreciseCallers 三处共用的 (fid<<20)|line int32
+键只给 fileID 留 12 位、行号 20 位：maxFiles>4096 时 fid 位溢出
+（fid=4096 键恒等 fid=0）、单文件超 2^20 行时行号位环绕——两路都把真
+引用误判为定义行剔除，静默漏报。改为 defLineKey: int64(fid)<<32 |
+uint32(line)，对 int32 全域单射无碰撞面。
+* test(codeintel): 去掉 defLineKey 恒等断言（staticcheck SA4000）
+
+- 杂务(deps)：依赖地板追到最新——github.com/oekit/pkg v0.39.0
+
+| 依赖 | 现地板 | 抬到 |
+|---|---|---|
+| `github.com/oekit/pkg` | `v0.38.0` | `v0.39.0` |
+## 为什么
+矩阵的**发版时刻地板时效**门禁（`verify_tag_floor --ref HEAD`）要求：各仓 HEAD
+（= 下次发版会发出去的内容）的依赖地板，相对那一刻的依赖最新版本，不能已落后。
+oekit 基座与矩阵模块都在高频发版 ⇒ 地板是**跑步机**，落后一格就会判红。
+## 兼容性实测
+本工具在提交前跑完 `go build` / `go vet` / `go test -race -count=1 ./...`（全绿才提交）
+与 `go mod tidy -diff`（无漂移）⇒ 改动**只影响依赖版本**，零行为差异。
+只改 `go.mod` / `go.sum` ⇒ 不需要 CHANGELOG 条目（版本段由下次发版的 `prewrite` 生成）。
+Co-authored-by: Murphy-Yi <zhangyi@Murphy-YideMac-Mini.local>
+
+
 ## [v0.10.4] — 2026-11-08
 
-### 依赖地板：oekit 基座追平——pkg v0.38.0 / logx v0.8.11 / concurrency v0.29.0
-
-oekit BOM v0.2.11 兼容地板门禁（oekit#163）对齐轮；无代码变更。
+- 与 v0.10.3 相比无代码差异（版本号/打包变更）
 
 ## [v0.10.3] — 2026-11-08
 

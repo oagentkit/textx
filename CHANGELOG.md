@@ -2,6 +2,12 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.10.3] — 2026-11-08
+
+### 修复(textutil)：SanitizeFileStem 消解纯路径点主干 "."/".."（textx#51）
+
+Merge branch 'main' into fix/issue-51-dotdot
+
 ## [v0.10.2] — 2026-11-08
 
 - 杂务(deps)：依赖地板追到最新——github.com/oekit/pkg v0.37.4

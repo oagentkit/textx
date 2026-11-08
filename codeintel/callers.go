@@ -43,16 +43,16 @@ func (x *Index) PreciseCallers(name string, limit int) []CallerRef {
 	if limit <= 0 {
 		limit = 50
 	}
-	defLines := map[int32]bool{}
+	defLines := map[int64]bool{}
 	for _, ds := range x.defs[strings.ToLower(name)] {
 		if fid, ok := x.fileIDOf(ds.File); ok {
-			defLines[fid<<20|int32(ds.Line)] = true
+			defLines[defLineKey(fid, int32(ds.Line))] = true
 		}
 	}
 	// 候选按文件聚合（同文件一次解析）；定义行与 GoCallers 同口径剔除
 	byFile := map[string][]int{}
 	for _, r := range x.calls[name] {
-		if defLines[r.file<<20|r.line] {
+		if defLines[defLineKey(r.file, r.line)] {
 			continue
 		}
 		byFile[x.fileNames[r.file]] = append(byFile[x.fileNames[r.file]], int(r.line))

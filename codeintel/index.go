@@ -80,6 +80,15 @@ func (x *Index) fileID(rel string) int32 {
 	return int32(len(x.fileNames) - 1)
 }
 
+// defLineKey 定义行去重键：int64(fid)<<32 | uint32(line)——References /
+// GoCallers / PreciseCallers 三处共用。旧 int32 (fid<<20)|line 只给 fileID 留
+// 12 位、行号 20 位：maxFiles>4096 时 fid 位溢出（fid=4096 的键恒等 fid=0）、
+// 单文件超 2^20 行时行号位环绕进 fid 位——两路都把真引用误判为定义行剔除，
+// 引用静默漏报（#63）。int64 拼接对 (fid,line) 的 int32 全域单射，无碰撞面。
+func defLineKey(fid, line int32) int64 {
+	return int64(fid)<<32 | int64(uint32(line))
+}
+
 // fileIDOf rel → 文件 ID 的只读查找（不存在返回 false——defs 可能来自
 // poly 侧等未入 files 表的来源）。
 func (x *Index) fileIDOf(rel string) (int32, bool) {
@@ -282,15 +291,15 @@ func (x *Index) References(name string, limit int) []Ref {
 	if limit <= 0 {
 		limit = 50
 	}
-	defLines := map[int32]bool{} // (fileID<<20)|line —— 免字符串拼接
+	defLines := map[int64]bool{} // defLineKey(fid, line) —— 免字符串拼接
 	for _, ds := range x.defs[strings.ToLower(name)] {
 		if fid, ok := x.fileIDOf(ds.File); ok {
-			defLines[fid<<20|int32(ds.Line)] = true
+			defLines[defLineKey(fid, int32(ds.Line))] = true
 		}
 	}
 	var out []Ref
 	for _, r := range x.refs[name] {
-		if defLines[r.file<<20|r.line] {
+		if defLines[defLineKey(r.file, r.line)] {
 			continue
 		}
 		out = append(out, Ref{File: x.fileNames[r.file], Line: int(r.line)})

@@ -215,6 +215,12 @@ func TruncateForRetry(entries []Message, cause error, attempt int) []Message {
 
 // countGroupsToCover 从最新往旧数需要几组才能覆盖 gap（对标
 // countRecentGroupsToCoverTokenGap：覆盖不完退半量，保底 1）。
+//
+// 「覆盖不完」只指全组扫完仍未到 gap（循环自然耗尽）；恰好差一组
+// （n == len-1）或全组（n == len）覆盖成功的都按实际组数返回——退半量会让
+// SelectAfterOverflow 移组不足，摘要请求再次溢出，白烧一轮 provider 重试
+// （#62）。n == len 时钳到 len-1（全移走摘要侧为空；调用方另有
+// min(maxPreserve,…) 兜底）。
 func countGroupsToCover(groups [][]Message, gap int) int {
 	if gap <= 0 || len(groups) == 0 {
 		return 0
@@ -224,11 +230,8 @@ func countGroupsToCover(groups [][]Message, gap int) int {
 		covered += EstimateTokens(groups[i])
 		n++
 		if covered >= gap {
-			break
+			return max(1, min(n, len(groups)-1))
 		}
 	}
-	if n >= len(groups)-1 {
-		return max(1, len(groups)/2)
-	}
-	return max(1, n)
+	return max(1, len(groups)/2)
 }

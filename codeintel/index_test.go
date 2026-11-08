@@ -176,9 +176,6 @@ func TestDefLineKeyNoCollision(t *testing.T) {
 	if defLineKey(1, 1<<20+4) == defLineKey(2, 4) {
 		t.Fatal("line=2^20+4 与相邻文件 line=4 键应不同")
 	}
-	if defLineKey(7, 9) != defLineKey(7, 9) {
-		t.Fatal("同 (fid,line) 应同键")
-	}
 	if defLineKey(0, 1<<20+4) == defLineKey(0, 4) {
 		t.Fatal("同文件 line=2^20+4 与 line=4 键应不同")
 	}

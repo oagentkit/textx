@@ -98,6 +98,67 @@ func TestSelectAfterOverflow(t *testing.T) {
 	}
 }
 
+// TestCountGroupsToCoverExactFit 回归（#62）：恰好差一组（n=len-1）或全组
+// （n=len）覆盖完 gap 都不算「覆盖不完」，必须按实际组数返回——旧判据
+// n >= len-1 把恰覆盖也打进退半量分支，SelectAfterOverflow 移组不足，
+// 摘要请求再次溢出，白烧一轮 provider 重试。
+func TestCountGroupsToCoverExactFit(t *testing.T) {
+	// 5 组每组恒定 1000 token（3000 ASCII 字符 = 3000 units = 1000 token）
+	groups := make([][]Message, 5)
+	for i := range groups {
+		groups[i] = []Message{{Role: RoleAssistant, Text: strings.Repeat("x", 3000)}}
+	}
+	per := EstimateTokens(groups[0])
+	if per != 1000 {
+		t.Fatalf("夹具恒定 1000 token: %d", per)
+	}
+	// n=4=len-1 恰好覆盖 → 返回 4（旧实现误退半量 2）
+	if got := countGroupsToCover(groups, 4*per); got != 4 {
+		t.Fatalf("n=len-1 恰覆盖应返回 4: got=%d", got)
+	}
+	// n=5=len 全组恰好覆盖 → 钳到 len-1=4（旧实现误退半量 2）
+	if got := countGroupsToCover(groups, 5*per); got != 4 {
+		t.Fatalf("全组恰覆盖应返回 len-1: got=%d", got)
+	}
+	// 全组扫完仍未覆盖（循环自然耗尽）→ 才退半量
+	if got := countGroupsToCover(groups, 5*per+1); got != 2 {
+		t.Fatalf("覆盖不完应退半量: got=%d", got)
+	}
+	// 常规：第 2 组即覆盖 → 2
+	if got := countGroupsToCover(groups, 2*per); got != 2 {
+		t.Fatalf("覆盖 2 组应返回 2: got=%d", got)
+	}
+	// gap<=0 / 空组 → 0
+	if got := countGroupsToCover(groups, 0); got != 0 {
+		t.Fatalf("gap=0 应 0: got=%d", got)
+	}
+	if got := countGroupsToCover(nil, 100); got != 0 {
+		t.Fatalf("空组应 0: got=%d", got)
+	}
+}
+
+// TestSelectAfterOverflowExactFitNoDoomedRetry 回归（#62）端到端：恰覆盖边界上
+// 旧实现返回移组不足的 doomed 选择（下一次摘要请求必然再溢出），修复后如实
+// 返回 nil（已无可行收紧——调用方走 TruncateForRetry，不再白烧摘要请求）。
+func TestSelectAfterOverflowExactFitNoDoomedRetry(t *testing.T) {
+	// 8 组 = leading user + 7×3003 token（mkRounds(7,3)：u≈1 + a≈2 + 3×1000）
+	msgs := mkRounds(7, 3)
+	// currentPreserved=1 → 摘要侧 7 组（[u,g1..g6]），从最新往旧 6 组恰覆盖
+	// gap=18018（n=6=len-1 恰覆盖边界）
+	cause := overflowErr("This model's maximum context length is 128000 tokens. However, you requested 146018 tokens. ")
+	sel := SelectAfterOverflow(msgs, cause, 1)
+	if sel != nil {
+		t.Fatalf("恰覆盖边界应如实返回 nil（旧实现移 3 组返回 doomed 选择）: %+v", sel)
+	}
+	// 略小于恰覆盖（4 组够）→ 正常收紧到 5 组保留（摘要侧剩 3 组、2 个
+	// assistant 轮次，HasEnoughToCompact 通过）
+	cause4 := overflowErr("This model's maximum context length is 128000 tokens. However, you requested 140012 tokens. ")
+	sel4 := SelectAfterOverflow(msgs, cause4, 1)
+	if sel4 == nil || sel4.GroupsPreserved != 5 {
+		t.Fatalf("覆盖 4 组应移 4 组（保留 5）: %+v", sel4)
+	}
+}
+
 func TestTruncateForRetry(t *testing.T) {
 	msgs := mkRounds(10, 3)
 	// 无 gap：按 20% 丢 2 组

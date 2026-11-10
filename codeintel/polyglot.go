@@ -108,7 +108,11 @@ func scanPy(text, lang string) []PolySymbol {
 	for _, m := range pyFuncRe.FindAllStringSubmatchIndex(text, -1) {
 		name := text[m[4]:m[5]]
 		args := textutil.TruncEllipsis(strings.TrimSpace(text[m[6]:m[7]]), 120)
-		line := 1 + strings.Count(text[:m[0]], "\n")
+		// Line 从名字捕获组（m[4]）起点计数（oagentkit/textx#71）：m[0] 是含
+		// 前置空白的匹配起点，Go regexp 的 \s 含 \n——^(\s*) 的最左匹配会在
+		// def 前的空行串落锚，text[:m[0]] 数的是空白串之前的换行数 ⇒ Line
+		// 偏小量 = 前置空行数。名字组不吃前置空白，计数起点即定义行。
+		line := 1 + strings.Count(text[:m[4]], "\n")
 		doc := ""
 		if nl := strings.Index(text[m[1]:], "\n"); nl >= 0 {
 			// def 头匹配末（m[1]）的下一**物理**行——此前对整段剩余文本
@@ -133,7 +137,9 @@ func scanJS(text, lang string) []PolySymbol {
 		if s < 0 {
 			continue
 		}
-		line := 1 + strings.Count(text[:m[0]], "\n")
+		// Line 从名字捕获组起点计数（oagentkit/textx#71）——m[0] 含前置空白，
+		// ^\s* 跨行吃空行后计数偏小；scanPy 同修，两侧对称。
+		line := 1 + strings.Count(text[:s], "\n")
 		out = append(out, PolySymbol{Name: text[s:e], Lang: lang, Line: line})
 	}
 	return out

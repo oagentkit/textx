@@ -2,6 +2,19 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.11.0] — 2026-11-12
+
+### 修复(codeintel)：polyglot 补 shell 词法函数表与 .mjs/.cjs/.pyw 扩展名（#83）
+
+- shellFuncRe 两形态：POSIX name() {（含 function name() { 混合）与
+  function name {，口径与 argus internal/langcap 对齐；scanShell 名字+行号
+  最小面，Line 计数三扫描器同口径（textx#71）
+- polyExts/polyScanners 查找表替 switch：.pyw 归 py、.mjs/.cjs 归 js、
+  .sh/.bash 归 shell
+- 顺手现代化：sort.Strings/SliceStable/Slice → slices.Sort/SortStableFunc/
+  SortFunc（go 1.21+，地板内合法）
+close #83
+
 ## [v0.10.9] — 2026-11-11
 
 ### 修复(conversation)：truncateLine 压平 U+0085/U+2028/U+2029 Unicode 行终止符（#75）

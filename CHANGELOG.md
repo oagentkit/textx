@@ -12,6 +12,11 @@ Render 的消费方是模型不是 CommonMark 渲染器——三个 Unicode 行�
 行的结构性注入面消除。
 Co-authored-by: Murphy-Yi <zhangyi@Murphy-YideMac-Mini.local>
 
+- 杂务(deps)：依赖地板追到最新——github.com/oekit/pkg v0.44.0
+
+Co-authored-by: Murphy-Yi <zhangyi@Murphy-YideMac-Mini.local>
+
+
 ## [v0.10.8] — 2026-11-11
 
 ### 修复(codeintel)：polyglot 符号行号从名字捕获组起计（#71）

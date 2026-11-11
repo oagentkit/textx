@@ -2,6 +2,16 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.10.9] — 2026-11-11
+
+### 修复(conversation)：truncateLine 压平 U+0085/U+2028/U+2029 Unicode 行终止符（#75）
+
+Render 的消费方是模型不是 CommonMark 渲染器——三个 Unicode 行终止符在模型
+侧同样形成换行观感，Question/Answer 里塞 \u2028 即可伪造「用户:/助手:」
+轮次行（与第九轮 \r 同理由的同清单残口）。压平为空格后 1 轮恒 2 行，新起
+行的结构性注入面消除。
+Co-authored-by: Murphy-Yi <zhangyi@Murphy-YideMac-Mini.local>
+
 ## [v0.10.8] — 2026-11-11
 
 ### 修复(codeintel)：polyglot 符号行号从名字捕获组起计（#71）

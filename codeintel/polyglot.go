@@ -1,6 +1,6 @@
-// polyglot.go —— 多语言词法符号表（JS/TS/Python）。
+// polyglot.go —— 多语言词法符号表（JS/TS/Python/Shell）。
 //
-// 边界如实声明：JS/TS/Python 与 Go 的 get_callers 全部是**词法级**索引
+// 边界如实声明：JS/TS/Python/Shell 与 Go 的 get_callers 全部是**词法级**索引
 // （正则锚定声明/调用形态），不做类型解析——与 Go 侧 go/scanner 同级质量，
 // 零新增依赖、零 cgo（CGO_ENABLED=0 兼容）。误报形态（字符串/注释内命中、
 // 动态调用）与 Go 词法索引一致，由工具描述向 agent 声明"须回 get_file 核实"。
@@ -22,17 +22,46 @@ var pyFuncRe = regexp.MustCompile(`(?m)^(\s*)(?:async\s+)?def\s+([A-Za-z_][A-Za-
 var jsFuncRe = regexp.MustCompile(`(?m)^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\s+([A-Za-z_$][A-Za-z0-9_$]*)|(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)(?::[^=
 ]+)?\s*=\s*(?:async\s*)?(?:\(|[A-Za-z_$][A-Za-z0-9_$]*\s*=>))`)
 
+// shellFuncRe shell 词法函数定义（oagentkit/textx#83）：组 2=POSIX `name() {`
+// 形态名（兼容 `function name() {` 混合形态），组 4=`function name {` 形态名。
+// 括号内空白用 [ \t] 不用 \s——\s 含 \n 会让跨行残片误命中；形态口径与
+// argus internal/langcap 的 shell fn 正则对齐。
+var shellFuncRe = regexp.MustCompile(`(?m)^[ \t]*(?:function[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*\([ \t]*\)[ \t\r\n]*\{|^[ \t]*function[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t\r\n]*\{`)
+
 // PolySymbol 非 Go 语言的词法符号。
 type PolySymbol struct {
 	Name string
-	Lang string // py | js
+	Lang string // py | js | shell
 	File string // 相对索引根
 	Line int
-	Args string // 参数表原文（≤120 runes）
+	Args string // 参数表原文（≤120 runes；shell 无参数表，空）
 	Doc  string // 前置 docstring/注释首行（≤120 runes，可空）
 }
 
-// scanPolyFiles 扫描 dir 下 .py/.js/.ts/.tsx 文件建词法符号表（上限与 Go 共享
+// polyExts 扩展名 → 语言归族（oagentkit/textx#83：.mjs/.cjs 归 js、.pyw 归 py、
+// .sh/.bash 归 shell）。
+var polyExts = map[string]string{
+	".py":   "py",
+	".pyw":  "py",
+	".js":   "js",
+	".mjs":  "js",
+	".cjs":  "js",
+	".ts":   "js",
+	".tsx":  "js",
+	".jsx":  "js",
+	".sh":   "shell",
+	".bash": "shell",
+}
+
+// polyScanners 语言 → 词法扫描器。
+var polyScanners = map[string]func(text, lang string) []PolySymbol{
+	"py":    scanPy,
+	"js":    scanJS,
+	"shell": scanShell,
+}
+
+// scanPolyFiles 扫描 dir 下 py 族（.py/.pyw）、js 族（.js/.mjs/.cjs/.ts/.tsx/.jsx）、
+// shell 族（.sh/.bash）文件建词法符号表（上限与 Go 共享
 // maxFiles 语义由调用方控制；这里独立 cap 防大仓重复遍历）。
 func scanPolyFiles(dir string, maxFiles int) (map[string][]PolySymbol, error) {
 	out := map[string][]PolySymbol{}
@@ -58,13 +87,8 @@ func scanPolyFiles(dir string, maxFiles int) (map[string][]PolySymbol, error) {
 			return filepath.SkipAll
 		}
 		ext := filepath.Ext(path)
-		var lang string
-		switch ext {
-		case ".py":
-			lang = "py"
-		case ".js", ".ts", ".tsx", ".jsx":
-			lang = "js"
-		default:
+		lang, ok := polyExts[ext]
+		if !ok {
 			return nil
 		}
 		fi, ierr := d.Info()
@@ -81,12 +105,7 @@ func scanPolyFiles(dir string, maxFiles int) (map[string][]PolySymbol, error) {
 		}
 		count++
 		text := string(src)
-		var syms []PolySymbol
-		if lang == "py" {
-			syms = scanPy(text, lang)
-		} else {
-			syms = scanJS(text, lang)
-		}
+		syms := polyScanners[lang](text, lang)
 		for i := range syms {
 			syms[i].File = filepath.ToSlash(rel)
 		}
@@ -139,6 +158,27 @@ func scanJS(text, lang string) []PolySymbol {
 		}
 		// Line 从名字捕获组起点计数（oagentkit/textx#71）——m[0] 含前置空白，
 		// ^\s* 跨行吃空行后计数偏小；scanPy 同修，两侧对称。
+		line := 1 + strings.Count(text[:s], "\n")
+		out = append(out, PolySymbol{Name: text[s:e], Lang: lang, Line: line})
+	}
+	return out
+}
+
+// scanShell shell 词法函数定义（oagentkit/textx#83）：组 2=POSIX 名
+// （`name() {`，`function name() {` 混合形态同组），组 4=`function name {` 名。
+// 与 scanJS 同为名字+行号最小面（shell 词法无参数表；注释内命中按词法口径
+// 如实计入，工具描述声明须核实）。
+func scanShell(text, lang string) []PolySymbol {
+	var out []PolySymbol
+	for _, m := range shellFuncRe.FindAllStringSubmatchIndex(text, -1) {
+		s, e := m[2], m[3]
+		if s < 0 {
+			s, e = m[4], m[5]
+		}
+		if s < 0 {
+			continue
+		}
+		// Line 从名字捕获组起点计数（oagentkit/textx#71），三扫描器同口径。
 		line := 1 + strings.Count(text[:s], "\n")
 		out = append(out, PolySymbol{Name: text[s:e], Lang: lang, Line: line})
 	}

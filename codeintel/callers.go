@@ -13,7 +13,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -61,7 +61,7 @@ func (x *Index) PreciseCallers(name string, limit int) []CallerRef {
 	for f := range byFile {
 		files = append(files, f)
 	}
-	sort.Strings(files)
+	slices.Sort(files)
 
 	fset := token.NewFileSet()
 	var out []CallerRef
@@ -80,11 +80,11 @@ func (x *Index) PreciseCallers(name string, limit int) []CallerRef {
 		}
 		out = append(out, declCalls(fset, af, rel, lines)...)
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].File != out[j].File {
-			return out[i].File < out[j].File
+	slices.SortStableFunc(out, func(a, b CallerRef) int {
+		if c := strings.Compare(a.File, b.File); c != 0 {
+			return c
 		}
-		return out[i].Line < out[j].Line
+		return a.Line - b.Line
 	})
 	if len(out) > limit {
 		out = out[:limit]

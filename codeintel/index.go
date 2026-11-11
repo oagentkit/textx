@@ -19,7 +19,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/oagentkit/textx/textutil"
@@ -324,11 +324,11 @@ func (x *Index) TouchedByLines(file string, from, to int) []Symbol {
 			}
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { // map 遍历序随机，输出按 (File,Line) 确定化
-		if out[i].File != out[j].File {
-			return out[i].File < out[j].File
+	slices.SortFunc(out, func(a, b Symbol) int { // map 遍历序随机，输出按 (File,Line) 确定化
+		if c := strings.Compare(a.File, b.File); c != 0 {
+			return c
 		}
-		return out[i].Line < out[j].Line
+		return a.Line - b.Line
 	})
 	return out
 }

@@ -63,6 +63,13 @@ func Combine(summary string, recent []Turn) string {
 func truncateLine(s string, n int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ") // \r 同为行终止符——不压平则跨行注入语义残留（第九轮审计）
+	// Unicode 行终止符三残口（textx#75）：U+0085(NEL)/U+2028(LS)/U+2029(PS)
+	// 在模型侧同样形成换行观感——Render 的消费方是模型不是 CommonMark 渲染
+	// 器，「用户:/助手:」的轮次结构可被伪造（会话注入辅助面）。与 \r 同理
+	// 压平为空格。
+	s = strings.ReplaceAll(s, "\u0085", " ")
+	s = strings.ReplaceAll(s, "\u2028", " ")
+	s = strings.ReplaceAll(s, "\u2029", " ")
 	t, tr := textutil.TruncRunes(s, n)
 	if tr {
 		return t + "…"

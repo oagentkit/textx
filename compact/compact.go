@@ -137,8 +137,13 @@ type ToolCall struct {
 	ArgsJSON string
 }
 
-// EstimateTokens 本地 token 估算：Σ ceil(字符数/3)，字符数含正文与工具调用
-// 入参（name + args JSON）。
+// EstimateTokens 本地 token 估算，逐条消息累加 msgTokens：先按 CJK 单位计量
+// （textutil.RuneUnitsCJK：汉字/假名/谚文/全角计 2 单位、其余 1，计量范围含正文与
+// 工具调用入参 name + args JSON），再折成 token（textutil.UnitsToTokensCJK：
+// units/3 向上取整、非空下限 1——30 汉字=60 units→20 token，纯 rune 口径只给 10）。
+// ⚠️ 与纯 rune 口径 Σ ceil(字符数/3)（textutil.EstTokens）是**量纲差**不是精度差：
+// 中文约 2 倍，不可在同一条链上混用（textx#30）。精确计量归 provider usage 回传，
+// 这只是事前估算。（textx#88：本条公式曾停留在被弃用的纯 rune 口径上。）
 func EstimateTokens(msgs []Message) int {
 	total := 0
 	for _, m := range msgs {

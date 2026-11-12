@@ -18,7 +18,8 @@ type Turn struct {
 	At       string `json:"at,omitempty"` // RFC3339 或任意时间标注（可观测用）
 }
 
-// 渲染截断上限（rune）：单轮注入不吞噬上下文预算。
+// 渲染截断上限（rune，**截断内容+省略号合计**）：单轮注入不吞噬上下文预算。
+// 截断分支产出恒 ≤ cap（textx#88：省略号计入上限，非 cap+1）。
 const (
 	QuestionCap = 200
 	AnswerCap   = 400
@@ -70,9 +71,17 @@ func truncateLine(s string, n int) string {
 	s = strings.ReplaceAll(s, "\u0085", " ")
 	s = strings.ReplaceAll(s, "\u2028", " ")
 	s = strings.ReplaceAll(s, "\u2029", " ")
-	t, tr := textutil.TruncRunes(s, n)
-	if tr {
-		return t + "…"
+	// 上限含省略号（textx#88）：TruncRunes 的 n 是「截断到 n 个 rune、不含省略号」
+	// （stringx.TruncEllipsis 同语义并明写「n 当总长度预算须先减 1」），直接拼 …
+	// 会产出 n+1 越过 QuestionCap/AnswerCap 预算线——真截断时按 n-1 截再补 …，
+	// 产出恒 ≤ n；恰好 n rune 的原文不动（无内容被丢就不打省略号）。
+	if n <= 0 {
+		return ""
 	}
-	return s
+	full, tr := textutil.TruncRunes(s, n)
+	if !tr {
+		return full // 未超限原样（TruncRunes 不截断时返回原串）
+	}
+	head, _ := textutil.TruncRunes(s, n-1)
+	return head + "…"
 }

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/oagentkit/textx/textutil"
 )
 
 func TestEstimateTokensCountsToolCallArgs(t *testing.T) {
@@ -318,3 +320,28 @@ func TestMicrocompactWithUsageOverride(t *testing.T) {
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+// TestEstimateTokensCJKUnitsFormula（textx#88 A 面）：导出 godoc 公式与实现
+// 同源——CJK 单位计量 + units/3 向上取整；曾过期的纯 rune 公式 Σ ceil(字符数/3)
+// 对中文差 2 倍（30 汉字：本口径 20、过期公式 10）。
+func TestEstimateTokensCJKUnitsFormula(t *testing.T) {
+	cn := strings.Repeat("汉", 30) // 60 units
+	got := EstimateTokens([]Message{{Role: RoleUser, Text: cn}})
+	if got != 20 {
+		t.Fatalf("30 汉字应 60 units → 20 token（过期纯 rune 公式只给 10）: got %d", got)
+	}
+	if want := textutil.UnitsToTokensCJK(textutil.RuneUnitsCJK(cn)); got != want {
+		t.Fatalf("应与 textutil（RuneUnitsCJK+UnitsToTokensCJK）折算同源: got %d want %d", got, want)
+	}
+	// 纯 ASCII 上两口径同值（30 → 10）：过期公式只在中文上暴露。
+	if got := EstimateTokens([]Message{{Role: RoleUser, Text: strings.Repeat("a", 30)}}); got != 10 {
+		t.Fatalf("30 ASCII 应 10 token: got %d", got)
+	}
+	// 计量范围含工具调用入参（name+args JSON）按同一 CJK 口径。
+	got = EstimateTokens([]Message{{Role: RoleAssistant, ToolCalls: []ToolCall{
+		{Name: "读", ArgsJSON: strings.Repeat("汉", 3)},
+	}}})
+	if want := textutil.UnitsToTokensCJK(textutil.RuneUnitsCJK("读") + textutil.RuneUnitsCJK("汉")*3); got != want {
+		t.Fatalf("工具入参应计入同口径: got %d want %d", got, want)
+	}
+}

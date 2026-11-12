@@ -8,7 +8,7 @@ go get github.com/oagentkit/textx
 
 | 包 | 职责 |
 |---|---|
-| `textutil` | 按行边界把文本切成 ≤target(rune) 的增量片，凑片不跨行；流式分片场景的底座 |
+| `textutil` | 按行边界把文本切成增量片：多行凑片 ≤target(rune) 且不跨行，单行超 target 整行成片（硬上限 hard）⇒ 每片 ≤ max(target, hard)；流式分片场景的底座 |
 | `diffx` | unified diff 解析纯函数 |
 | `codeintel` | 轻量代码符号索引 |
 | `compact` | 会话压缩策略面：auto-compact 判定（阈值/熔断/token 双轨）+ 压缩/恢复 |

@@ -99,3 +99,46 @@ func TestEstTokensCJK(t *testing.T) {
 		t.Fatalf("全角标点应按 2 计，得到 %d", got)
 	}
 }
+
+// TestChunkLinesRealBoundMaxTargetHard（textx#87）：三方承诺（godoc/README/测试）
+// 的真实上界钉源——单行（含行尾换行）落进 (target, hard] 时整行成片、片长可到
+// hard；超 hard 在 hard 硬切；全短行输入上界收紧回 target。join 恒还原原文。
+// （旧夹具每行仅 3 rune，绕开了触发区，契约断言不具备把关能力。）
+func TestChunkLinesRealBoundMaxTargetHard(t *testing.T) {
+	const target, hard = 160, 400
+	bound := max(target, hard)
+	mk := map[string]string{
+		"单行=target含换行(target+1)":  strings.Repeat("字", target) + "\n",
+		"单行300rune∈(target,hard]": strings.Repeat("字", 300) + "\n",
+		"单行=hard":                 strings.Repeat("字", hard) + "\n",
+		"单行>hard":                 strings.Repeat("字", hard+1),
+		"短行夹长行混合":                 strings.Repeat("短行\n", 5) + strings.Repeat("长", 300) + "\n" + strings.Repeat("短行\n", 5),
+	}
+	for name, src := range mk {
+		chunks := ChunkLines(src, target, hard)
+		if got := strings.Join(chunks, ""); got != src {
+			t.Fatalf("%s: join 应严格等于原文", name)
+		}
+		for i, c := range chunks {
+			if n := len([]rune(c)); n > bound {
+				t.Fatalf("%s: 片 %d 超 max(target,hard)=%d：%d rune", name, i, bound, n)
+			}
+		}
+	}
+
+	// 对照组：全部单行（含换行）≤ target ⇒ 凑片路径上界收紧回 target。
+	short := strings.Repeat("短内容行\n", 40)
+	for i, c := range ChunkLines(short, target, hard) {
+		if n := len([]rune(c)); n > target {
+			t.Fatalf("全短行片 %d 超 target：%d rune", i, n)
+		}
+	}
+
+	// 消费方要严格上界 R：传 target=hard=R 两档合一。
+	strict := strings.Repeat("字", hard+57)
+	for i, c := range ChunkLines(strict, bound, bound) {
+		if n := len([]rune(c)); n > bound {
+			t.Fatalf("target=hard 严格上界失效，片 %d：%d rune", i, n)
+		}
+	}
+}

@@ -5,9 +5,14 @@ import (
 	"unicode/utf8"
 )
 
-// ChunkLines 按行边界把文本切成 ≤target（rune）的增量片：凑片不跨行
-// （markdown 表格/列表行保持完整，中途渲染不碎）；超长单行在 hard 处硬切
-// （base64/长 URL 不设上限会把节奏拖成整行卡顿）。SplitAfter 语义保留行尾
+// ChunkLines 按行边界把文本切成增量片（textx#87 钉真实上界，三处声明同源）：
+//   - 多行凑片不跨行且 ≤ target（rune）——markdown 表格/列表行保持完整，中途渲染不碎；
+//   - 单行（含行尾换行）长度 ∈ (target, hard] 时整行独立成片、仍不跨行，故该档片长
+//     可到 hard；超过 hard 的单行在 hard 处硬切（base64/长 URL 不设上限会把节奏拖成
+//     整行卡顿）。
+//
+// ⇒ 每片 ≤ max(target, hard)：恰为 target 的单行带换行即 target+1，归单行档。
+// 需要严格 ≤ R 的消费方传 target=hard=R（两档上界合一）。SplitAfter 语义保留行尾
 // 换行——join(所有片) 严格等于原文（消费方按序归并即得全文，无需分隔符约定）。
 // target/hard<=0 取缺省（160/400）；空白文本返回 nil。
 func ChunkLines(s string, target, hard int) []string {

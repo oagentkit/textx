@@ -2,6 +2,43 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.12.0] — 2026-11-14
+
+### 新增(textutil)：下沉 增量 UTF-8 解码器
+
+新增 textutil.Decoder：字节流按任意切块喂入即产出安全文本，三条契约
+（不完整尾字节留存、非法字节消费 1 字节吐 U+FFFD 防死循环、Flush 逐字节
+清账）与宿主参考实现 bianque internal/terminal/utf8stream.go 语义等价。
+API 面：New() *Decoder / Decode([]byte) string / Flush() string。
+测试：全切点还原、逐字节喂入、截断残留 Flush、七类非法字节向量、
+跨块交错死循环回归、空块、状态隔离、stdlib ToValidUTF8 交叉对账。
+
+### 修复(textutil,compact,conversation)：ChunkLines 真实上界钉源、EstimateTokens 公式与截断上限对齐实现（#87 #88）
+
+- #87：ChunkLines 声明侧修法——godoc/README 改述真实上界 ≤ max(target, hard)（多行凑片 ≤target 不跨行；单行含换行 ∈ (target,hard] 整行成片到 hard、超 hard 硬切），补 target=hard=R 严格上界用法；测试夹具补触发区（单行=target/target+1/300/400/401、短行夹长行、全短行收紧回 target）
+- #88：A 面 compact.EstimateTokens godoc 改述实际口径（RuneUnitsCJK 单位计量 + UnitsToTokensCJK 折算，30 汉字 20 token、过期纯 rune 公式给 10 差 2 倍）并钉与 textutil 同源；B 面 conversation 截断改按 n-1 截再补省略号，QuestionCap/AnswerCap 声明为「截断内容+省略号合计」——截断分支产出恒 ≤ cap（曾为 cap+1）
+
+- 杂务(deps)：依赖地板追到最新——github.com/oekit/pkg v0.47.0
+
+* chore(deps): 依赖地板追到最新——github.com/oekit/pkg v0.48.0
+| 依赖 | 现地板 | 抬到 |
+|---|---|---|
+| `github.com/oekit/pkg` | `v0.44.0` | `v0.48.0` |
+## 为什么
+矩阵的**发版时刻地板时效**门禁（`verify_tag_floor --ref HEAD`）要求：各仓 HEAD
+（= 下次发版会发出去的内容）的依赖地板，相对那一刻的依赖最新版本，不能已落后。
+oekit 基座与矩阵模块都在高频发版 ⇒ 地板是**跑步机**，落后一格就会判红。
+## 兼容性实测
+本工具在提交前跑完 `go build` / `go vet` / `go test -race -count=1 ./...`（全绿才提交）
+与 `go mod tidy -diff`（无漂移）⇒ 改动**只影响依赖版本**，零行为差异。
+只改 `go.mod` / `go.sum` ⇒ 不需要 CHANGELOG 条目（版本段由下次发版的 `prewrite` 生成）。
+* chore(ci): go-version 1.24 → 1.26——go.mod 指令随 pkg v0.48.0 顶高，CI 工具链同步（matrix-tools#210 同款，#214 未合前的手工补位）
+---------
+Co-authored-by: Murphy-Yi <zhangyi@Murphy-YideMac-Mini.local>
+
+
+- 格式(textutil)：gofmt decoder_test.go（CI Lint 门禁）
+
 ## [v0.11.0] — 2026-11-12
 
 ### 修复(codeintel)：polyglot 补 shell 词法函数表与 .mjs/.cjs/.pyw 扩展名（#83）

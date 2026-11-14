@@ -32,7 +32,7 @@ func TestDecoderSplitEveryPosition(t *testing.T) {
 	corpora := []string{
 		"hello, world",
 		"你好，世界",
-		"aé你😀b",           // 1/2/3/4 字节字符混排
+		"aé你😀b",            // 1/2/3/4 字节字符混排
 		"UTF-8 边界 你好 ok 😀", // ASCII 与多字节交错
 	}
 	for _, s := range corpora {

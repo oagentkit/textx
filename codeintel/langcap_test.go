@@ -28,10 +28,6 @@ func TestLangcapIndependentChunkFace(t *testing.T) {
 // TestPolySymbolExtsMatchesExecution 声明面（PolySymbolExts）与执行面
 // （polyglot polyExts 的键）等值——扩面漏一边即红（防漂移门禁）。
 func TestPolySymbolExtsMatchesExecution(t *testing.T) {
-	execKeys := make([]string, 0, len(polyExts))
-	for k := range polyExts {
-		execKeys = append(execKeys, k)
-	}
 	seen := map[string]bool{}
 	for _, e := range PolySymbolExts {
 		if _, ok := polyExts[e]; !ok {

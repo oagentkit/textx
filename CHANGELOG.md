@@ -2,6 +2,28 @@
 
 > 本文件由 `matrix-tools/scripts/gen_changelogs.py` 从 git 历史生成，按 tag 切段、取每段内的 conventional commit 渲染。
 
+## [v0.14.0] — 2026-11-26
+
+### 新增：承接 goagent-kernel 对话域上下文工程三包——budget/spill/offload
+
+自 goagent-kernel 平移（归属评测 2026-11-26，kernel#504 同 wave）：三包判据
+主语是会话上下文（输入分段计量/输出溢出存档/大对象外置），不是多智能体编排，
+按概念域分派归 textx（与 compact/conversation 同层姊妹包）。
+- 导出面与判据逐字未变（零 kernel 内部依赖，仅 oekit/pkg）；
+- budget.go 生命周期注释改为 org 通行约定（api-lifecycle 门禁不随迁）；
+- compact.go 注释去掉 contract/checkpoint 死引用（kernel 内部件不在此仓）；
+- AGENTS.md/README 包清单 6→9、依赖面补 pathx、边界表新增编排判据/roundguard 指向。
+
+- 构建：依赖地板对齐——pkg → v0.61.4
+- 构建：依赖地板对齐——pkg → v0.61.3
+- 构建：依赖地板对齐——pkg → v0.61.2
+- 构建：依赖地板对齐——pkg → v0.61.2
+
+* build: 解决 go.mod 地板冲突（rebase 时同 module 两行版本取高者）
+* build: 解决 go.sum 冲突（rebase 时同 module 两版本取高者）
+
+- 构建：依赖地板对齐——pkg v0.60.0 → v0.61.1
+
 ## [v0.13.0] — 2026-11-23
 
 ### 新增(gotyped)：go/types 精确调用边抽取——嵌套模块隔离重依赖（#106）

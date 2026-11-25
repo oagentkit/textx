@@ -14,6 +14,9 @@ go get github.com/oagentkit/textx
 | `compact` | 会话压缩策略面：auto-compact 判定（阈值/熔断/token 双轨）+ 压缩/恢复 |
 | `conversation` | 多轮会话历史原语：滚动窗口切分、历史渲染 |
 | `reportutil` | 评审/评测报告后处理：severity 归并、sampling、stats、`Fingerprint`/`NormalizeComment` 精确指纹 |
+| `budget` | 上下文窗口输入侧预算：分段计量 + `MaxInput` 窗口钳位 + 压实计划骨架（三重空转守卫；摘要生成与原文落盘留宿主接口）。自 goagent-kernel 平移（归属评测 2026-11-26：对话域上下文工程，判据主语不是编排） |
+| `spill` | 输出预算溢出存档：提示契约 / 分页取回（**rune 无损**，页边界不切坏多字节字符）/ 按龄清理 |
+| `offload` | 内联大对象外置：sha 去重 + **两阶段**（首次标记、后续轮才替换占位）+ fail-soft；`ExtForMimeType` 显式 override 表防 `.jfif` 静默改键 |
 
 ## 定位
 

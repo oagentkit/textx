@@ -1,13 +1,13 @@
 # AGENTS.md — oagentkit/textx
 
-> 文本与差异处理纯函数集，6 个包：`textutil` `diffx` `codeintel` `compact` `conversation` `reportutil`
+> 文本与上下文工程纯函数集，9 个包：`textutil` `diffx` `codeintel` `compact` `conversation` `reportutil` `budget` `spill` `offload`
 > module：`github.com/oagentkit/textx` · org：[oagentkit = Open Agent Kit](https://github.com/oagentkit)
 > 矩阵分层：**tier 0（基础层）**
 
 ## 本仓包含
 
 ```
-textutil/  diffx/  codeintel/  compact/  conversation/  reportutil/
+textutil/  diffx/  codeintel/  compact/  conversation/  reportutil/  budget/  spill/  offload/
 ```
 
 ## 硬规则
@@ -15,7 +15,7 @@ textutil/  diffx/  codeintel/  compact/  conversation/  reportutil/
 ### 分层与依赖
 
 - 依赖严格自底向上，**禁止反向依赖**。本仓是 tier 0，任何矩阵内模块都不得被本仓依赖。
-- 本仓只依赖 `github.com/oekit/pkg`（`stringx`/`encoding`/`mathx`）。**新增外部依赖前先确认
+- 本仓只依赖 `github.com/oekit/pkg`（`errors`/`stringx`/`encoding`/`mathx`/`pathx`）。**新增外部依赖前先确认
   `oekit/pkg` 里没有** —— 这是矩阵的既定分工。
 - 新增依赖 = 抬地板，会拖慢所有下游，必须有明确理由。
 
@@ -75,6 +75,8 @@ tag 必须落在 CHANGELOG 提交**之后** —— 下游 `go get` 拿到的是 
 
 | 能力 | 归属 |
 |---|---|
+| 编排判据（轮/环节/子任务/介入/续跑的状态与闸） | `github.com/oagentkit/goagent-kernel` |
+| 单 agent 循环判据（回合预算/停止处置） | `github.com/oagentkit/agent/roundguard` |
 | 并发/流控/子进程/热插拔/钩子 | `github.com/oagentkit/runtime` |
 | 熔断 | `github.com/oekit/concurrency/breaker`（`runtime/breaker` 已于 runtime v0.3.0 退役） |
 | 通用 errors/stringx/encoding/mathx | `github.com/oekit/pkg` |
